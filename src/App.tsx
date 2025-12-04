@@ -3,6 +3,7 @@ import React, { useState } from 'react'
 // In production we would not have hardcoded email/query here
 const API_BASE = '/api'
 const QUERY = '?email=trevor.spielman@gmail.com'
+// Base URL for the API and query parameters for fetching data.
 
 function tryParse(jsonStr: string) {
   try {
@@ -11,22 +12,26 @@ function tryParse(jsonStr: string) {
     return { ok: false, error: (e as Error).message }
   }
 }
+/**
+ * Attempts to parse a JSON string. Returns an object with
+ * { ok: true, value } if successful, or { ok: false, error } if parsing fails.
+ */
 
 function sanitizeCommonIssues(input: string): string {
-  let s = input
+  let inputString = input
 
   // 1) Remove trailing commas before } or ]
-  s = s.replace(/,\s*(?=[}\]])/g, '')
+  inputString = inputString.replace(/,\s*(?=[}\]])/g, '')
 
   // 2) Add quotes around unquoted object keys (simple heuristic)
   // Matches keys like: { key: or , key:
-  s = s.replace(/([\{,\s])([A-Za-z0-9_@\$-]+)\s*:/g, '$1"$2":')
+  inputString = inputString.replace(/([\{,\s])([A-Za-z0-9_@\$-]+)\s*:/g, '$1"$2":')
 
   // 3) Fix unclosed string by ensuring even number of quotes. If odd, close at end.
-  const quotes = (s.match(/"/g) || []).length
-  if (quotes % 2 === 1) s = s + '"'
+  const quotes = (inputString.match(/"/g) || []).length
+  if (quotes % 2 === 1) inputString = inputString + '"'
 
-  return s
+  return inputString
 }
 
 export default function App() {
@@ -35,24 +40,24 @@ export default function App() {
   const [parseError, setParseError] = useState<string | null>(null)
   const [parsedValue, setParsedValue] = useState<any | null>(null)
   const [parsedOk, setParsedOk] = useState<boolean>(false)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState<boolean>(false)
 
   async function handleFetch() {
     setLoading(true)
     setParseError(null)
     try {
       const res = await fetch(API_BASE + QUERY)
-      const text = await res.text()
-      setOriginalRaw(text)
+      const queryText = await res.text()
+      setOriginalRaw(queryText)
 
       // First try parse as-is
-      const p = tryParse(text)
-      if (p.ok) {
-        setValidatedRaw(JSON.stringify(p.value, null, 2))
-        setParsedValue(p.value)
+      const parseQuery = tryParse(queryText)
+      if (parseQuery.ok) {
+        setValidatedRaw(JSON.stringify(parseQuery.value, null, 2))
+        setParsedValue(parseQuery.value)
         setParsedOk(true)
       } else {
-        const sanitized = sanitizeCommonIssues(text)
+        const sanitized = sanitizeCommonIssues(queryText)
         const p2 = tryParse(sanitized)
         if (p2.ok) {
           setValidatedRaw(JSON.stringify(p2.value, null, 2))
@@ -80,7 +85,12 @@ export default function App() {
     }
 
     try {
-      const body = await JSON.stringify(p.value)
+        // Stringify the validated JSON object for the "data" field
+        const payload = {
+          email: "trevor.spielman@gmail.com",
+          data: JSON.stringify(p.value)
+        }
+        const body = JSON.stringify(payload)
       console.log('Sending POST body:', body)
       const res = await fetch(API_BASE + QUERY, {
         method: 'POST',
@@ -93,6 +103,11 @@ export default function App() {
       alert('POST failed: ' + (e as Error).message)
     }
   }
+  /**
+   * Validates the current editor contents, then POSTs the stringified JSON
+   * to the API in the required format: { email, data }.
+   * Alerts with the API response or error.
+   */
 
   function handleValidate() {
     const p = tryParse(validatedRaw)
@@ -108,6 +123,10 @@ export default function App() {
       console.warn('Validation failed:', p.error)
     }
   }
+  /**
+   * Manually validates the current editor contents, updating parsed state and
+   * pretty-printing the JSON if valid. Shows a console message for success/failure.
+   */
 
   return (
     <div className="app-root">
